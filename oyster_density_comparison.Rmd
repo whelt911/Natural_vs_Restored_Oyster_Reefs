@@ -24,13 +24,13 @@ The purpose of this comparison is to investigate whether restoration reefs of di
 library("plyr") #loads count()
 
 # Read data into R
-load("C:/from_dylan/Rwd/EQIP_data/oyster.data")
-load("C:/from_dylan/Rwd/EQIP_data/quadrat.data")
+load(oyster.data)
+load(quadrat.data)
 eqip_oyster <- oyster.data
 eqip_quadrat <- quadrat.data
 
-load("C:/from_dylan/Rwd/FHE_data/oyster.data")
-load("C:/from_dylan/Rwd/FHE_data/quadrat.data")
+load(oyster.data)
+load(quadrat.data)
 fhe_oyster <- oyster.data
 fhe_quadrat <- quadrat.data
 rm(oyster.data)
