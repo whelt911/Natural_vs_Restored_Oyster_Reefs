@@ -1,0 +1,193 @@
+---
+title: 'Comparison of Oyster Reef Densities: EQIP vs. FHE vs. Natural'
+output:
+  word_document: default
+  html_notebook: default
+---
+
+For this comparison, we will use a combination of oyster sampling through the EQIP and FHE monitoring projects.
+
+The 3 treatments are:
+
+  <ul>EQIP (est. 2008 - 2010)</ul>
+  <ul>FHE (est. Fall 2015)</ul>
+  <ul>Natural</ul>
+
+
+The natural reefs are located in Foster Cove, while the FHE and EQIP reefs are located in the Northern and Southern portions of the Spawner Sanctuary within Ninigret Pond.
+
+The purpose of this comparison is to investigate whether restoration reefs of different ages mimic naturally occuring reefs in the same water body.
+
+
+```{r echo = FALSE}
+# Load necessary packages
+library("plyr") #loads count()
+
+# Read data into R
+load("C:/from_dylan/Rwd/EQIP_data/oyster.data")
+load("C:/from_dylan/Rwd/EQIP_data/quadrat.data")
+eqip_oyster <- oyster.data
+eqip_quadrat <- quadrat.data
+
+load("C:/from_dylan/Rwd/FHE_data/oyster.data")
+load("C:/from_dylan/Rwd/FHE_data/quadrat.data")
+fhe_oyster <- oyster.data
+fhe_quadrat <- quadrat.data
+rm(oyster.data)
+rm(quadrat.data)
+
+# Clean up data and merge
+
+## Only inlcude EQIP oysters from Ninigret Pond & Foster Cove
+eqip_oyster <- subset(eqip_oyster, Pond == "N Ninigret Pond" | Pond == "S Ninigret Pond" | Pond == "Foster Cove")
+eqip_quadrat <- subset(eqip_quadrat, Pond == "N Ninigret Pond" | Pond == "S Ninigret Pond" | Pond == "Foster Cove")
+
+## EQIP/Nat : Determine mean density of live oysters by reef
+### remember to take into account difference in quadrat size
+live_eqip_oyster <- subset(eqip_oyster, Alive.Dead == 8)
+
+eqip_counts <- count(live_eqip_oyster, c("ID","Quadrat.Number","Quadrat.Size",
+                                                 "Pond"))
+
+### prepare to merge counts & quadrat data to include 0 counts
+eqip_quadrat <- eqip_quadrat[,c(2,3,6,8)]
+
+eqip_counts <- merge(eqip_counts, eqip_quadrat, by = c("ID","Quadrat.Number","Quadrat.Size",
+                                                       "Pond"), all.y = TRUE)
+eqip_counts$freq[is.na(eqip_counts$freq)] <- 0
+
+## calculate density/m2
+eqip_counts$multiplier <- 1/eqip_counts$Quadrat.Size
+eqip_counts$density <- eqip_counts$freq * eqip_counts$multiplier
+
+## find mean
+eqip_mean <- aggregate(eqip_counts$density ~ eqip_counts$ID, FUN = mean)
+colnames(eqip_mean) <- c("ID","Density")
+## add treatment column
+eqip_mean$Treatment <- ifelse(eqip_mean$ID == "FCNR1" | eqip_mean$ID == "FCNR2" | 
+                                eqip_mean$ID == "FCNR3" | eqip_mean$ID == "FCNR5" |
+                                eqip_mean$ID == "FCNR6","Natural", "EQIP")
+
+## FHE : Determine mean density of live oysters by reef
+live_fhe_oyster <- subset(fhe_oyster, Alive.Dead == 8 & Date.Collected > "2016-08-01")
+live_fhe_oyster <- subset(live_fhe_oyster, Site.ID != "Nin-1U")
+
+fhe_counts <- count(live_fhe_oyster, c("Site.ID","Quadrat.Number","Subsample.","Live.Oyster.Count",
+                                       "Quadrat.Size"))
+fhe_counts[16,3] <- 0
+fhe_counts$sum <- fhe_counts$Live.Oyster.Count + fhe_counts$freq
+fhe_counts$multiplier <- 1/fhe_counts$Quadrat.Size
+fhe_counts$density <- fhe_counts$sum * fhe_counts$multiplier
+
+
+fhe_quadrat <- subset(fhe_quadrat, Date.Collected > "2016-08-01")
+fhe_quadrat <- subset(fhe_quadrat, Site.ID == "Nin-1S" | Site.ID == "Nin-2S" | Site.ID == "Nin-3S" |
+                        Site.ID == "Nin-4S")
+fhe_quadrat <- fhe_quadrat[,c(1,4)]
+
+fhe_counts <- merge(fhe_counts, fhe_quadrat, by = c("Site.ID", "Quadrat.Number"), all = TRUE)
+fhe_counts$density[is.na(fhe_counts$density)] <- 0
+
+
+fhe_mean <- aggregate(fhe_counts$density ~ fhe_counts$Site.ID, FUN = mean)
+colnames(fhe_mean) <- c("ID","Density")
+fhe_mean$Treatment <- "FHE"
+
+dat <- rbind(eqip_mean, fhe_mean)
+replicates <- count(dat$Treatment)
+dat$Treatment <- as.factor(dat$Treatment)
+colnames(replicates) <- c("Treatment","Replicates")
+print(replicates)
+```
+
+We have varying replication by treatment, and 4-5 replicates is pretty low.
+
+```{r echo = FALSE}
+boxplot(dat$Density ~ dat$Treatment, xlab = "Treatment",
+        ylab = "Density/m2")
+print(subset(dat, Treatment == "FHE"))
+```
+
+Natural Reefs contain what appears to be an outlier, but we will keep in sample.
+
+We also notice "Nin-1S" reef in the FHE treatment has an outlier, but due to low replication we will include in sample.  This error is likely due to the aggressive subsampling coupled with large variation in oyster density across reefs.  We will increase the number of quadrats sampled per reef in future oyster monitoring.
+
+EQIP reefs contain a large proportion of 0 density reefs.  
+
+```{r message = FALSE, warning = FALSE}
+library(car)
+model_dat <- aov(Density ~ Treatment, data = dat)
+leveneTest(model_dat)
+shapiro.test(model_dat$residuals)
+```
+
+Data are non-normal and heteroscedastic
+
+Attempt log + 1 transformation
+
+```{r warning = FALSE}
+dat$logdens <- log(dat$Density + 1)
+log_model_dat <- aov(logdens~Treatment,dat)
+leveneTest(log_model_dat)
+boxplot(dat$logdens~dat$Treatment)
+shapiro.test(log_model_dat$residuals)
+```
+
+Log +1 transformed data are homoscedastic but still non-normal distribtution.
+
+Will proceed with Kruskal-Wallis Test.
+
+```{r}
+kruskal.test(logdens~Treatment, dat)
+```
+
+We find that there is a significant difference in rank between treatments
+
+Post-hoc pairwise comparisons:
+
+```{r warning = FALSE}
+library(PMCMR)
+posthoc.kruskal.nemenyi.test(logdens~Treatment, dat)
+
+```
+
+We determine that EQIP is significant from FHE & Natural
+
+```{r warning=FALSE}
+library(sciplot)
+library(ggplot2)
+
+log_plot_data_mean <- aggregate(dat$logdens~dat$Treatment, FUN = mean)
+colnames(log_plot_data_mean) <- c("Treatment","Log.Mean")
+log_plot_data_se <- aggregate(dat$logdens~dat$Treatment, FUN = se)
+colnames(log_plot_data_se) <- c("Treatment", "Log.SE")
+
+log_plot_data <- merge(log_plot_data_mean,log_plot_data_se, by = "Treatment")
+log_plot_data$Label[1] <- "A"
+log_plot_data$Label[2:3] <- "B"
+
+log_plot <- ggplot(log_plot_data, aes(x=Treatment, y=Log.Mean)) + 
+  geom_bar(position=position_dodge(), stat="identity",colour = "black", fill = "grey") +
+  geom_errorbar(aes(ymin=Log.Mean-Log.SE, ymax=Log.Mean+Log.SE),
+                width=.4,                    # Width of the error bars
+                position=position_dodge(.9)) +
+  geom_text(data=log_plot_data, aes(x = Treatment, y = Log.Mean, label = Label),vjust = -3) +
+  ylab("Log Oysters/m2 +-SE") + 
+  xlab("Treatment") + 
+  theme(axis.text = element_text(size = 12),legend.title=element_text(size=12),
+        axis.title = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = ("black"))) + 
+        scale_y_continuous(expand = c(0, 0),limits = c(0,6))
+log_plot
+
+```
+```{r echo=FALSE}
+save(live_eqip_oyster, file = "live_eqip_oyster")
+save(live_fhe_oyster, file = "live_fhe_oyster")
+```
+
+

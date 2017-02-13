@@ -1,0 +1,129 @@
+---
+title: "Comparison of Natural vs. Restored Oysters"
+output: html_notebook
+---
+
+This analysis will focus on Ninigret Pond, because we have the presence of natural reefs, restored reefs, and aquaculture in order to make direct comparisons.
+
+In Ninigret, we have 3 treatments for oysters:
+
+<ul>Aquaculture</ul>
+<ul>Natural (Foster Cove)</ul>
+<ul>Restored (FHE)</ul>
+
+
+# Compare Condition Indices:
+<br>
+## Number of replicates per treatment
+```{r echo = TRUE}
+# Load necessary packages
+library("plyr") #loads count()
+
+# Read data into R
+oyster_dat <- read.csv("oyster_data.csv")
+
+# Subset only oysters collected in Ninigret/Foster Cove
+ninigret_dat <- subset(oyster_dat, oyster_dat$Site == c("Ninigret FHE","Ninigret Aquaculture","Foster Cove"))
+
+# Remove all oysters not measured for condition
+CI_dat <- subset(ninigret_dat, ninigret_dat$Total_Mass_g != "")
+CI_dat$Total_Mass_g <- as.numeric(CI_dat$Total_Mass_g )
+CI_counts <- count(CI_dat$Site)
+colnames(CI_counts) <- c("Treatment","Replicates")
+CI_counts
+
+# Remove unnecessary columns
+CI_dat <- CI_dat[,-c(7:10)]
+
+```
+<br>
+<br>
+The sample sizes are not equal, but they are very close.
+<br>
+<br>
+
+## Calculate Condition Index 
+
+Condition Index is a common way to assess the effects of environmental conditions, such as salinity, temperature, tidal elevation, food quality, pollution, and presence of parasites, on oysters is by comparing condition index (CI) values among oysters exposed to differing conditions or located in various locations (e.g. Lawrence and Scott 1982, Rainer and Mann 1992, Rheault and Rice 1996).
+<br>
+<br>
+Formula for calculating CI:
+<br>
+CI = (Tissue Dry Weight * 100)/(Shell Dry Weight)
+<br>
+<br>
+```{r}
+# Calculate CI for oysters
+CI_dat$CI <- (CI_dat$Total_Dry_Tissue_g * 100)/(CI_dat$Total_Dry_Shell_g)
+
+```
+
+## Plot linear relationship of Dry Tissue / Dry Shell
+
+```{r}
+all_reg <- lm(CI_dat$Total_Dry_Tissue_g ~ CI_dat$Total_Dry_Shell_g)
+print(summary(all_reg))
+plot(CI_dat$Total_Dry_Tissue_g ~ CI_dat$Total_Dry_Shell_g,
+     xlab = "Dry Shell Weight (g)", ylab = "Dry Tissue Weight (g)",
+     pch = 16)
+abline(all_reg)
+```
+Adjusted R-squared:  0.1096
+
+Some outliers are present.
+
+## Plot linear relationship by Pond
+
+```{r echo = FALSE}
+aqua_reg <- lm(CI_dat$Total_Dry_Tissue_g[CI_dat$Culture == "Aquaculture"] ~
+                                           CI_dat$Total_Dry_Shell_g[CI_dat$Culture == "Aquaculture"])
+FHE_reg <- lm(CI_dat$Total_Dry_Tissue_g[CI_dat$Culture == "FHE"] ~
+                                           CI_dat$Total_Dry_Shell_g[CI_dat$Culture == "FHE"])
+nat_reg <- lm(CI_dat$Total_Dry_Tissue_g[CI_dat$Culture == "Natural"] ~
+                                           CI_dat$Total_Dry_Shell_g[CI_dat$Culture == "Natural"])
+plot(CI_dat$Total_Dry_Tissue_g ~ CI_dat$Total_Dry_Shell_g,
+     xlab = "Dry Shell Weight (g)", ylab = "Dry Tissue Weight (g)",
+     pch = 16)
+points(CI_dat$Total_Dry_Shell_g[CI_dat$Culture == 'Aquaculture'], 
+        CI_dat$Total_Dry_Tissue_g[CI_dat$Culture == 'Aquaculture'], 
+       pch=16, col='blue')
+points(CI_dat$Total_Dry_Shell_g[CI_dat$Culture == 'FHE'], 
+        CI_dat$Total_Dry_Tissue_g[CI_dat$Culture == 'FHE'], 
+       pch=16, col='red')
+points(CI_dat$Total_Dry_Shell_g[CI_dat$Culture == 'Natural'], 
+        CI_dat$Total_Dry_Tissue_g[CI_dat$Culture == 'Natural'], 
+       pch=16, col='green')
+legend('bottomright',legend = unique(CI_dat$Culture), pch = 16, bty = 'o', 
+       col = c('blue','red','green'))
+abline(aqua_reg, col = "blue")
+abline(FHE_reg, col = "red")
+abline(nat_reg, col = "green")
+```
+
+Better linear fits emerge
+
+How do we explain outliers and relationship of Aquaculture?
+
+First, let's look at Aquacultured oysters
+
+```{r}
+aqua_dat <- subset(CI_dat, CI_dat$Culture == "Aquaculture")
+print(aqua_dat[,c(8,10)])
+
+```
+
+We see that some oysters were not dried properly and wet tissue weight equals dry tissue weight.  We will remove these oysters from the dataset.
+
+```{r}
+CI_dat <-CI_dat[!(CI_dat$Wet_Tissue_g == CI_dat$Dry_Tissue_g),]
+```
+
+6 oysters were removed from the dataset.
+
+Next let's look at the two oysters with extremely large dry shell weights.
+
+```{r}
+subset(CI_dat, CI_dat$Total_Dry_Shell_g > 90)
+```
+
+
