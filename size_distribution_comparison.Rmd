@@ -1,0 +1,131 @@
+---
+title: "Comparison of Oyster Size Distributions: EQIP vs. FHE vs. Natural"
+output: html_notebook
+---
+
+For this comparison, we will use a combination of oyster sampling through the EQIP and FHE monitoring projects.
+
+The 3 treatments are:
+
+  * EQIP (est. 2008 - 2010)
+  * FHE (est. Fall 2015)
+  * Natural
+
+
+The natural reefs are located in Foster Cove, while the FHE and EQIP reefs are located in the Northern and Southern portions of the Spawner Sanctuary within Ninigret Pond.
+
+The purpose of this comparison is to investigate whether restoration reefs of different ages mimic naturally occuring reefs in the same water body, specifically regarding oyster length distribution
+
+
+
+```{r echo = FALSE}
+# Read in data
+load("C:/from_dylan/Rwd/live_eqip_oyster")
+load("C:/from_dylan/Rwd/live_fhe_oyster")
+
+# Clean data in order to use
+live_eqip_oyster <- live_eqip_oyster[,c(1,3,4,12)]
+colnames(live_eqip_oyster)[4] <- "Treatment"
+live_fhe_oyster <- live_fhe_oyster[c(1,3,4)]
+live_fhe_oyster$Treatment <- as.factor("FHE")
+colnames(live_fhe_oyster)[1] <- "ID"
+
+dat <- rbind(live_eqip_oyster, live_fhe_oyster)
+
+```
+
+Let's start by plotting histograms of the length distribution of each treatment:
+
+```{r}
+# Create histograms
+vec.breaks <- seq(from = 0, to = 170, by = 10) # set to 170 bc max length is 167
+eqip.hist <- hist(subset(dat, Treatment == "EQIP")$Size.mm , breaks = vec.breaks,
+                col = 'grey',
+                xlab = 'Length of Oyster (mm)',
+                ylab = 'Frequency',
+                main = 'EQIP')
+
+```
+
+```{r echo = FALSE}
+fhe.hist <- hist(subset(dat, Treatment == "FHE")$Size.mm , breaks = vec.breaks,
+                col = 'grey',
+                xlab = 'Length of Oyster (mm)',
+                ylab = 'Frequency',
+                main = 'FHE')
+natural.hist <- hist(subset(dat, Treatment == "Natural")$Size.mm , breaks = vec.breaks,
+                col = 'grey',
+                xlab = 'Length of Oyster (mm)',
+                ylab = 'Frequency',
+                main = 'Natural')
+```
+
+
+These histograms look different, but not entirely different.  EQIP has a normal distribution with a bit of a tail to the right.  FHE has a notmal distribution indicating one large size class with likely some recent recruits.  Natural reefs reveal a definite recruiting class with 1-2 year oysters.  The natural natural reefs are in unprotected waters, so their lack of >90mm oysters can be explained.
+
+To start, let's look at the proportion of the population that is composed of recruits.  Typically, studies identify new recruits as individuals less than 25mm in length, so we will do the same.
+
+```{r}
+library(plyr)
+
+dat_prop <- count(dat, c("ID","Treatment"))
+colnames(dat_prop)[3]<- 'Total.Count'
+recruit_dat <- subset(dat, Size.mm < 25)
+recruit_dat <- count(recruit_dat, c("ID","Treatment"))
+colnames(recruit_dat)[3] <- "Rec.Count"
+
+dat_prop <- merge(dat_prop, recruit_dat, by = c("ID","Treatment"), all = T)
+
+# Remove EQIP bc there are no recruits
+dat_prop <- subset(dat_prop, Treatment != "EQIP")
+dat_prop$Treatment <- factor(dat_prop$Treatment)
+dat_prop$Proportion <- dat_prop$Rec.Count/dat_prop$Total.Count
+
+boxplot(dat_prop$Proportion ~ dat_prop$Treatment, xlab = "Treatment",
+        ylab = "Proportion of recent recruits")
+print(dat_prop)
+```
+
+It is interesting that one Natural reef is composed 95% of recent recruits
+
+
+Mann-Whitney U test for non normal distributions:
+
+```{r}
+aov_model <- aov(Proportion ~ Treatment, dat = dat_prop)
+leveneTest(aov_model)
+```
+
+
+```{r}
+wilcox.test(Proportion ~ Treatment, data=dat_prop)
+```
+
+```{r echo = TRUE}
+library(sciplot)
+library(ggplot2)
+
+dat_mean <- aggregate(dat_prop$Proportion~dat_prop$Treatment, FUN = mean)
+colnames(dat_mean) <- c("Treatment","Mean")
+dat_se <- aggregate(dat_prop$Proportion~dat_prop$Treatment, FUN = se)
+colnames(dat_se) <- c("Treatment", "SE")
+
+dat_merge <- merge(dat_mean, dat_se, by = "Treatment")
+
+prop_plot <- ggplot(dat_merge, aes(x=Treatment, y=Mean)) + 
+  geom_bar(position=position_dodge(), stat="identity",colour = "black", fill = "grey") +
+  geom_errorbar(aes(ymin=Mean-SE, ymax=Mean+SE),
+                width=.4,                    # Width of the error bars
+                position=position_dodge(.9)) +
+  ylab("Mean Proportion Recent Recruits+SE") + 
+  xlab("Treatment") + 
+  theme(axis.text = element_text(size = 12),legend.title=element_text(size=12),
+        axis.title = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = ("black"))) + 
+        scale_y_continuous(expand = c(0, 0))
+prop_plot
+```
