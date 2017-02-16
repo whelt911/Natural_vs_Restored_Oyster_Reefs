@@ -23,6 +23,14 @@ The purpose of this comparison is to investigate whether restoration reefs of di
 load("C:/from_dylan/Rwd/live_eqip_oyster")
 load("C:/from_dylan/Rwd/live_fhe_oyster")
 
+load("C:/from_dylan/Rwd/EQIP_data/quadrat.data")
+eqip_quad <- quadrat.data
+
+load("C:/from_dylan/Rwd/FHE_data/quadrat.data")
+fhe_quad <- quadrat.data
+
+rm(quadrat.data)
+
 # Clean data in order to use
 live_eqip_oyster <- live_eqip_oyster[,c(1,3,4,12)]
 colnames(live_eqip_oyster)[4] <- "Treatment"
@@ -92,6 +100,7 @@ It is interesting that one Natural reef is composed 95% of recent recruits
 Mann-Whitney U test for non normal distributions:
 
 ```{r}
+library(car)
 aov_model <- aov(Proportion ~ Treatment, dat = dat_prop)
 leveneTest(aov_model)
 ```
@@ -129,3 +138,86 @@ prop_plot <- ggplot(dat_merge, aes(x=Treatment, y=Mean)) +
         scale_y_continuous(expand = c(0, 0))
 prop_plot
 ```
+
+
+
+## On second thought, recruitment Proportion is probably not the way to go...
+
+# A look at recruitment rate may paint a better picture.
+## Number of recruits per m2
+
+```{r}
+eqip_quad <- eqip_quad[,c(2,3,8)]
+
+fhe_quad <- subset(fhe_quad, Date.Collected > "2016-8-01")
+fhe_quad <- fhe_quad[,c(1,4,8)]
+colnames(fhe_quad)[1]<- "ID"
+fhe_quad <- subset(fhe_quad, ID == "Nin-1S" | ID == "Nin-2S" | ID == "Nin-3S" | ID == "Nin-4S")
+fhe_quad$Treatment <- factor("FHE")
+
+total_per_quad <- count(dat, vars = c("ID","Quadrat.Number","Treatment"))
+colnames(total_per_quad)[4]<- "Total.Measured"
+
+recruits_per_quad <- subset(dat, Size.mm < 25)
+recruits_per_quad <- count(recruits_per_quad, vars = c("ID","Quadrat.Number"))
+colnames(recruits_per_quad)[3] <- "Recruits.Measured"
+
+counts_per_quad <- merge(total_per_quad,recruits_per_quad, by = c("ID","Quadrat.Number"), all = T)
+counts_per_quad <- subset(counts_per_quad, Treatment != "EQIP")
+counts_per_quad$ID <- factor(counts_per_quad$ID)
+counts_per_quad$Recruits.Measured[is.na(counts_per_quad$Recruits.Measured)] <- 0
+
+all_counts <- merge(counts_per_quad, fhe_quad, by = c("ID","Quadrat.Number","Treatment"), all = T)
+all_counts[is.na(all_counts)] <- 0
+all_counts$Recruits.Adj <- ifelse(all_counts$Live.Oyster.Count != 0,
+                                  (all_counts$Recruits.Measured * 
+                                    (all_counts$Total.Measured + all_counts$Live.Oyster.Count))/
+                                    all_counts$Total.Measured,all_counts$Recruits.Measured)
+rate_aggregate <- aggregate(all_counts$Recruits.Adj ~ all_counts$ID+all_counts$Treatment, FUN = mean)
+colnames(rate_aggregate) <- c("ID","Treatment","Recruits.Adj")
+rate_aggregate$Treatment <- factor(rate_aggregate$Treatment)
+rate_aggregate$Recruits.Adj <- rate_aggregate$Recruits.Adj * 4 #to get rate /m2 rather than 1/4m2
+boxplot(rate_aggregate$Recruits.Adj ~ rate_aggregate$Treatment)
+```
+
+This boxplot looks pretty ugly, but may perform well with some sort of log transformation
+
+```{r}
+rate_aggregate$Log.Recruitment <- log(rate_aggregate$Recruits.Adj)
+boxplot(rate_aggregate$Log.Recruitment ~ rate_aggregate$Treatment)
+
+rate_model <- aov(rate_aggregate$Log.Recruitment ~ rate_aggregate$Treatment)
+shapiro.test(rate_model$residuals)
+leveneTest(rate_model)
+```
+
+Model satisfies assumptions of normality and variance (slightly)
+
+```{r}
+summary(rate_model)
+
+rate_mean <- aggregate(rate_aggregate$Recruits.Adj~rate_aggregate$Treatment, FUN = mean)
+colnames(rate_mean) <- c("Treatment","Mean")
+rate_se <- aggregate(rate_aggregate$Recruits.Adj~rate_aggregate$Treatment, FUN = se)
+colnames(rate_se) <- c("Treatment", "SE")
+
+rate_merge <- merge(rate_mean, rate_se, by = "Treatment")
+
+rate_plot <- ggplot(rate_merge, aes(x=Treatment, y=Mean)) + 
+  geom_bar(position=position_dodge(), stat="identity",colour = "black", fill = "grey") +
+  geom_errorbar(aes(ymin=Mean-SE, ymax=Mean+SE),
+                width=.4,                    # Width of the error bars
+                position=position_dodge(.9)) +
+  ylab("Mean Rate Recent Recruits+SE") + 
+  xlab("Treatment") + 
+  theme(axis.text = element_text(size = 12),legend.title=element_text(size=12),
+        axis.title = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = ("black"))) + 
+        scale_y_continuous(expand = c(0, 0))
+rate_plot
+```
+
