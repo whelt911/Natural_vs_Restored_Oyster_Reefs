@@ -44,6 +44,10 @@ dat <- rbind(live_eqip_oyster, live_fhe_oyster)
 
 Let's start by plotting histograms of the length distribution of each treatment:
 
+This will give as an idea of how oysters are distributed by length.
+
+## Histograms
+
 ```{r}
 # Create histograms
 vec.breaks <- seq(from = 0, to = 170, by = 10) # set to 170 bc max length is 167
@@ -97,6 +101,8 @@ print(dat_prop)
 It is interesting that one Natural reef is composed 95% of recent recruits
 
 
+## Statistical Analysis
+
 Mann-Whitney U test for non normal distributions:
 
 ```{r}
@@ -143,7 +149,8 @@ prop_plot
 
 ## On second thought, recruitment Proportion is probably not the way to go...
 
-# A look at recruitment rate may paint a better picture.
+# Recruitment Rate
+## A look at recruitment rate may paint a better picture.
 ## Number of recruits per m2
 
 ```{r}
@@ -182,6 +189,8 @@ boxplot(rate_aggregate$Recruits.Adj ~ rate_aggregate$Treatment)
 
 This boxplot looks pretty ugly, but may perform well with some sort of log transformation
 
+## Statistical Analysis
+
 ```{r}
 rate_aggregate$Log.Recruitment <- log(rate_aggregate$Recruits.Adj)
 boxplot(rate_aggregate$Log.Recruitment ~ rate_aggregate$Treatment)
@@ -193,8 +202,17 @@ leveneTest(rate_model)
 
 Model satisfies assumptions of normality and variance (slightly)
 
+
 ```{r}
 summary(rate_model)
+```
+
+Results show statistical significance between treatments.
+
+## Final Plot
+
+```{r}
+
 
 rate_mean <- aggregate(rate_aggregate$Recruits.Adj~rate_aggregate$Treatment, FUN = mean)
 colnames(rate_mean) <- c("Treatment","Mean")

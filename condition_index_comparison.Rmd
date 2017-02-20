@@ -1,5 +1,5 @@
 ---
-title: "Comparison of Natural vs. Restored Oysters"
+title: "Condition Index of Natural vs. Restored Oysters"
 output: html_notebook
 ---
 
@@ -93,6 +93,10 @@ abline(FHE_reg, col = "red")
 abline(nat_reg, col = "green")
 ```
 
+## Plot variance across length
+
+This plot looks funny, will troubleshoot.
+
 ```{r}
 FHE_CI_reg <- lm(CI_dat$CI[CI_dat$Culture == "FHE"] ~
                                            CI_dat$Total_Dry_Shell_g[CI_dat$Culture == "FHE"])
@@ -135,9 +139,14 @@ anova(lm(CI ~ Site + Total_Dry_Shell_g, CI_dat))
 
 Data are normally distributed, but have unequal variances.  Will perform Welch's ANOVA
 
+## Statistical Analysis
+
 ```{r}
 oneway.test(CI ~ Site, CI_dat, var.equal = FALSE)
 ```
+
+
+## Final Plot
 
 ```{r}
 library(sciplot)
@@ -165,5 +174,11 @@ CI_plot <- ggplot(CI_plot_dat, aes(x=Treatment, y=Mean)) +
         axis.line = element_line(colour = ("black"))) + 
         scale_y_continuous(expand = c(0, 0), limits = c(0,5))
 CI_plot
+```
+
+### N for each treatment
+
+```{r}
+count(CI_dat, vars = "Culture")
 ```
 

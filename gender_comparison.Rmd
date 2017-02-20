@@ -1,0 +1,113 @@
+---
+title: "Comparison of Sex Ratios"
+output: html_notebook
+---
+ 
+
+
+```{r echo = FALSE}
+library(plyr)
+
+# Read data into R
+oyster_dat <- read.csv("oyster_data.csv")
+gender_dat <- subset(oyster_dat, Sex !="")
+
+natural <- subset(gender_dat, Culture == "Natural")
+count(natural, vars = c("Site","Sex"))
+
+aggregate(natural$Shell_Length_mm ~ natural$Site, FUN = mean)
+```
+
+## Linear Regression
+
+First, lets determine if oyster size drives gender probability
+
+Pobably easiest to visualize this by binning it
+
+```{r}
+gender_result <- subset(gender_dat, Sex != "N/A")
+# min = 33; max = 187
+bin_vector <- seq(30, 190, 5)
+gender_result$Bin <- .bincode(gender_result$Shell_Length_mm, bin_vector)
+
+bin_rat <- count(gender_result, vars = c("Bin","Sex"))
+bin_rat <- reshape(bin_rat, timevar = "Sex", idvar = "Bin", direction = "wide")
+colnames(bin_rat) <- c("Bin", "Male","Female")
+bin_rat$FM_Ratio <- bin_rat$Female/bin_rat$Male
+bin_rat$Prop_Female <- bin_rat$Female/(bin_rat$Female + bin_rat$Male)
+plot(bin_rat$Prop_Female ~ bin_rat$Bin,
+     ylim = c(0,1), ylab = "Proportion Female", xlab = "5mm Bin")
+abline(lm(bin_rat$Prop_Female ~ bin_rat$Bin))
+```
+
+Clearly, gender is a function of size.  Whether or not it is correlated linearly is uncertain given the sample size.
+
+I think we can do better with a logistic regression.
+
+## Binomial Logistic Regression
+
+```{r}
+gender_result$Sex <- factor(gender_result$Sex)
+gender_result$Sex_Binom <- ifelse(gender_result$Sex == "M", 0, 1)
+
+g <- glm(Sex_Binom ~ Shell_Length_mm, family = binomial, gender_result)
+
+plot(gender_result$Shell_Length_mm, gender_result$Sex_Binom, 
+     xlab = "Length(mm)", ylab = "Probability of Female")
+curve(predict(g, data.frame(Shell_Length_mm = x), type="resp"),add=TRUE)
+```
+
+It appears that low n and distribution of oysters across length do not give this analysis much power.  This analysis may be very useful study is performed in the future.
+
+Perhaps the correlation is stronger with Tissue wt? (may investigate in the future)
+
+```{r}
+
+```
+
+
+Check mean and median oyster lengths across treatments to determine whether length can confound data
+
+```{r}
+length_aggregates_mean <-aggregate(gender_result$Shell_Length_mm ~ gender_result$Site, FUN = mean)
+colnames(length_aggregates_mean) <- c("Site","Mean.Length")
+length_aggregates_median <- aggregate(gender_result$Shell_Length_mm ~ gender_result$Site, FUN = median)
+colnames(length_aggregates_median) <- c("Site","Median.Length")
+length_aggregates_se <- aggregate(gender_result$Shell_Length_mm ~ gender_result$Site, FUN = se)
+colnames(length_aggregates_se) <- c("Site","SE")
+
+
+length_aggregates <- merge(length_aggregates_mean, length_aggregates_median, by = "Site")
+length_aggregates <- merge(length_aggregates, length_aggregates_se, by = "Site")
+length_aggregates
+
+boxplot(gender_result$Shell_Length_mm ~ gender_result$Site)
+```
+
+
+# Gender Ratio on Natural (Foster Cove) vs. FHE Reefs
+
+Dylan's collected data is hard to decipher for this set.  It appears that many Foster Cove oysters do not come from a quadrat.  Will treat entire treatment as one sample, so no analysis power, really.
+
+The smallest oyster sampled was 38mm, so no oysters should be recent recruits
+
+```{r}
+ninigret <- subset(gender_result, Site == "Foster Cove" | Site == "Ninigret FHE")
+
+ninigret_ratios <- aggregate(ninigret$Sex_Binom ~ ninigret$Site, FUN = mean)
+colnames(ninigret_ratios) <- c("Site","Proportion.Female")
+
+barplot(height = ninigret_ratios$Proportion.Female, names.arg = ninigret_ratios$Site,
+        xlab = "Treatment", ylab = "Proportion Female", axes = TRUE,
+        ylim = c(0,.5))
+```
+
+Results show that FC has a larger proportion of females.  This study contains small sample size and is only a preliminary, exploratory study.  Future work would shed more light on this imbalance and could help answer the lack of recruitment conundrum.
+
+
+### Calculate N
+
+```{r}
+count(ninigret, vars = "Culture")
+```
+

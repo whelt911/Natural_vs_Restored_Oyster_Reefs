@@ -1,8 +1,8 @@
 ---
 title: 'Comparison of Oyster Reef Densities: EQIP vs. FHE vs. Natural'
 output:
-  word_document: default
   html_notebook: default
+  word_document: default
 ---
 
 For this comparison, we will use a combination of oyster sampling through the EQIP and FHE monitoring projects.
@@ -24,13 +24,13 @@ The purpose of this comparison is to investigate whether restoration reefs of di
 library("plyr") #loads count()
 
 # Read data into R
-load(oyster.data)
-load(quadrat.data)
+load("C:/from_dylan/Rwd/EQIP_data/oyster.data")
+load("C:/from_dylan/Rwd/EQIP_data/quadrat.data")
 eqip_oyster <- oyster.data
 eqip_quadrat <- quadrat.data
 
-load(oyster.data)
-load(quadrat.data)
+load("C:/from_dylan/Rwd/FHE_data/oyster.data")
+load("C:/from_dylan/Rwd/FHE_data/quadrat.data")
 fhe_oyster <- oyster.data
 fhe_quadrat <- quadrat.data
 rm(oyster.data)
@@ -110,9 +110,9 @@ print(subset(dat, Treatment == "FHE"))
 
 Natural Reefs contain what appears to be an outlier, but we will keep in sample.
 
-We also notice "Nin-1S" reef in the FHE treatment has an outlier, but due to low replication we will include in sample.  This error is likely due to the aggressive subsampling coupled with large variation in oyster density across reefs.  We will increase the number of quadrats sampled per reef in future oyster monitoring.
+We also notice "Nin-1S" reef in the FHE treatment has an outlier, but due to low replication we will include in sample.  This error is likely due to the aggressive subsampling coupled with large variation in oyster density across reefs.  We will increase the number of quadrats sampled per reef in future oyster monitoring, which should reduce noise.
 
-EQIP reefs contain a large proportion of 0 density reefs.  
+EQIP reefs contain a large proportion of 0 density reefs.  In future analysis, it may be wise to consider some sort of 0-inflated model. 
 
 ```{r message = FALSE, warning = FALSE}
 library(car)
@@ -121,9 +121,9 @@ leveneTest(model_dat)
 shapiro.test(model_dat$residuals)
 ```
 
-Data are non-normal and heteroscedastic
+Data are non-normal and heteroscedastic.
 
-Attempt log + 1 transformation
+Let's perform a log + 1 transformation.  "+1" accounts for 0's in EQIP treatment.
 
 ```{r warning = FALSE}
 dat$logdens <- log(dat$Density + 1)
@@ -135,7 +135,7 @@ shapiro.test(log_model_dat$residuals)
 
 Log +1 transformed data are homoscedastic but still non-normal distribtution.
 
-Will proceed with Kruskal-Wallis Test.
+Will proceed with Kruskal-Wallis Test for non-parametric data.
 
 ```{r}
 kruskal.test(logdens~Treatment, dat)
@@ -143,7 +143,8 @@ kruskal.test(logdens~Treatment, dat)
 
 We find that there is a significant difference in rank between treatments
 
-Post-hoc pairwise comparisons:
+Nemenyi Post-hoc pairwise comparisons:
+(may be worth considering a couple other post-hoc comparisons for consistency)
 
 ```{r warning = FALSE}
 library(PMCMR)
@@ -151,7 +152,9 @@ posthoc.kruskal.nemenyi.test(logdens~Treatment, dat)
 
 ```
 
-We determine that EQIP is significant from FHE & Natural
+We determine that EQIP is significant from FHE & Natural.
+
+## Final Plot of means + SE
 
 ```{r warning=FALSE}
 library(sciplot)
@@ -166,13 +169,24 @@ log_plot_data <- merge(log_plot_data_mean,log_plot_data_se, by = "Treatment")
 log_plot_data$Label[1] <- "A"
 log_plot_data$Label[2:3] <- "B"
 
-log_plot <- ggplot(log_plot_data, aes(x=Treatment, y=Log.Mean)) + 
+# Back transform data
+plot_data_mean <- aggregate(dat$Density~dat$Treatment, FUN = mean)
+colnames(plot_data_mean) <- c("Treatment","Mean")
+plot_data_se <- aggregate(dat$Density~dat$Treatment, FUN = se)
+colnames(plot_data_se) <- c("Treatment", "SE")
+
+plot_data <- merge(plot_data_mean,plot_data_se, by = "Treatment")
+plot_data$Label[1] <- "A"
+plot_data$Label[2:3] <- "B"
+# Plot results
+
+density_plot <- ggplot(plot_data, aes(x=Treatment, y=Mean)) + 
   geom_bar(position=position_dodge(), stat="identity",colour = "black", fill = "grey") +
-  geom_errorbar(aes(ymin=Log.Mean-Log.SE, ymax=Log.Mean+Log.SE),
+  geom_errorbar(aes(ymin=Mean-SE, ymax=Mean+SE),
                 width=.4,                    # Width of the error bars
                 position=position_dodge(.9)) +
-  geom_text(data=log_plot_data, aes(x = Treatment, y = Log.Mean, label = Label),vjust = -3) +
-  ylab("Log Oysters/m2 +-SE") + 
+  geom_text(data=plot_data, aes(x = Treatment, y = Mean, label = Label),vjust = -8) +
+  ylab("Oysters/m2 +-SE") + 
   xlab("Treatment") + 
   theme(axis.text = element_text(size = 12),legend.title=element_text(size=12),
         axis.title = element_text(size = 12),
@@ -181,13 +195,9 @@ log_plot <- ggplot(log_plot_data, aes(x=Treatment, y=Log.Mean)) +
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
         axis.line = element_line(colour = ("black"))) + 
-        scale_y_continuous(expand = c(0, 0),limits = c(0,6))
-log_plot
+        scale_y_continuous(expand = c(0, 0), limits = c(0,250))
+density_plot
 
-```
-```{r echo=FALSE}
-save(live_eqip_oyster, file = "live_eqip_oyster")
-save(live_fhe_oyster, file = "live_fhe_oyster")
 ```
 
 
